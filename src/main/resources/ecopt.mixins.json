@@ -1,0 +1,22 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "first.ecopt.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ClassInstanceMultiMapMixin",
+    "CollisionGetterMixin",
+    "EntityGetterMixin",
+    "EntityMixin",
+    "EntitySectionMixin",
+    "EntitySectionStorageMixin",
+    "LevelChunkMixin",
+    "LevelChunkSectionMixin",
+    "LevelEntityGetterAdapterMixin",
+    "LevelMixin",
+    "LivingEntityMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

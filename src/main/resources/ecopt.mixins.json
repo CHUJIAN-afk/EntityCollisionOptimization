@@ -6,8 +6,6 @@
   "refmap": "ecopt.refmap.json",
   "mixins": [
     "ClassInstanceMultiMapMixin",
-    "CollisionGetterMixin",
-    "EntityGetterMixin",
     "EntityMixin",
     "EntitySectionMixin",
     "EntitySectionStorageMixin",

@@ -9,4 +9,5 @@ public final class EntityCollisionOptimization {
     public static final String MODID = "ecopt";
 
 
+
 }

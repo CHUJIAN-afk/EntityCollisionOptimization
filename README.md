@@ -42,8 +42,16 @@ Minecraft **1.21.1 / NeoForge 21.1.238** 的实体碰撞与实体段查询优化
 
 构建：ForgeGradle 6 + MixinGradle，`official` + 1.20.1 映射，Forge `47.4.22`，Java 17，元数据用 `src/main/templates/META-INF/mods.toml`。
 
-**优化清单与 1.21.1/NeoForge 版本完全一致，没有降级或停用项**：11 个 mixin 的注入点、候选表、子格索引、方块缓存、支撑方块捷径在 1.20.1 上都是等价生效的（相关方法签名逐一核对过，`EntitySection#add/remove/getEntities`、`EntitySectionStorage#createSection`、`LevelEntityGetterAdapter#sectionStorage`、`LevelChunkSection#setBlockState/read/recalcBlockCounts/maybeHas`、`LevelChunk#getBlockState`、`ClassInstanceMultiMap#iterator/find`、`Level#getEntities()`、`LivingEntity#pushEntities`、`EntitySelector#CAN_BE_COLLIDED_WITH`、`EntitySelector#NO_SPECTATORS` 均未变）。
+**1.20.1 生效情况见下：有 2 项停用**：11 个 mixin 的注入点、候选表、子格索引、方块缓存、支撑方块捷径在 1.20.1 上都是等价生效的（相关方法签名逐一核对过，`EntitySection#add/remove/getEntities`、`EntitySectionStorage#createSection`、`LevelEntityGetterAdapter#sectionStorage`、`LevelChunkSection#setBlockState/read/recalcBlockCounts/maybeHas`、`LevelChunk#getBlockState`、`ClassInstanceMultiMap#iterator/find`、`Level#getEntities()`、`LivingEntity#pushEntities`、`EntitySelector#CAN_BE_COLLIDED_WITH`、`EntitySelector#NO_SPECTATORS` 均未变）。
 
+**1.20.1 上停用 2 项优化**：`EntityGetter#getEntityCollisions` 接管 与 `CollisionGetter#noCollision` 快速实现。
+Forge 1.20.1 使用 Mixin **0.8.5**，MixinExtras 0.5.3 的 `@WrapMethod` 在接口 mixin 上不被支持
+（运行时报 `InvalidInterfaceMixinException: ... is not supported on interface mixin method`，且为 FATAL）。
+这两项在 1.21.1/NeoForge（Mixin 0.8.7）上正常生效。其余 **9 个 mixin 全部保留且等价生效**
+（段级增量表、推挤查询接管、方块状态缓存、段修改版本号、段内子格索引、迭代器去包装、支撑方块捷径、
+实体查询时间戳、段坐标注入），即推挤 / 方块读取 / 段查询链路的收益与 1.21.1 一致，
+缺的是密集堆积场景里收益最大的"实体碰撞查询接管"与"noCollision 快速实现"。
+停用后 1.20.1 服务端启动实测：`Done (10.970s)!`，日志无 ERROR/FATAL/异常。
 移植时需要处理的差异：
 
 * **事件系统**：改用 `net.minecraftforge.event.TickEvent.ServerTickEvent` / `ClientTickEvent`（判断 `Phase.END`）、`net.minecraftforge.eventbus.api.SubscribeEvent`、`net.minecraftforge.fml.common.Mod.EventBusSubscriber`，主类 `@Mod` 来自 `net.minecraftforge.fml.common.Mod`；

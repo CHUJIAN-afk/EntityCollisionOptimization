@@ -43,7 +43,11 @@ public abstract class EntityMixin implements EcoptVisitable {
         this.ecopt$queryStamp = stamp;
     }
 
-    @Inject(method = "updateFluidHeightAndDoFluidPushing()V", at = @At("HEAD"), cancellable = true)
+    /**
+     * {@code updateFluidHeightAndDoFluidPushing()} 是 Forge 补丁新增的重载（1.20.1 原版只有
+     * {@code (TagKey<Fluid>, double)} 版本），生产环境不会被 SRG 重命名，因此 remap = false。
+     */
+    @Inject(method = "updateFluidHeightAndDoFluidPushing()V", at = @At("HEAD"), cancellable = true, remap = false)
     private void ecopt$skipDryFluidScan(CallbackInfo ci) {
         Entity self = (Entity) (Object) this;
         Level level = self.level();

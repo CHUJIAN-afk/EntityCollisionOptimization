@@ -29,7 +29,11 @@ public abstract class LevelChunkMixin implements EcoptChunkCacheHolder {
         this.ecopt$table = table;
     }
 
-    @Inject(method = "getBlockState", at = @At("HEAD"), cancellable = true)
+    @Inject(
+            method = "getBlockState(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;",
+            at = @At("HEAD"),
+            cancellable = true
+    )
     private void ecopt$cachedBlockState(BlockPos pos, CallbackInfoReturnable<BlockState> cir) {
         cir.setReturnValue(EcoptBlockCache.getBlockState((LevelChunk) (Object) this, pos));
     }

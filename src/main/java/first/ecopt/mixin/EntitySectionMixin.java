@@ -3,10 +3,9 @@ package first.ecopt.mixin;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -34,14 +33,16 @@ import net.minecraft.world.phys.AABB;
  * ③ 查询框完整包含整段时跳过逐实体 AABB 判定；<br>
  * ④ 小查询框且同 tick 内本段被查 ≥2 次时改用段内子格索引（每格 2 格方块，8³ = 512 桶，惰性分配），
  * 实体按包围盒覆盖的全部子格归档、查询按实体时间戳去重，add/remove 立即失效。
+ *
+ * <p>内部的 {@code storage} 用 {@code @Accessor} 而不是 {@code @Shadow}：注解处理器会把
+ * {@code @Accessor} 的目标写进 refmap，1.20.1 Forge 生产环境（SRG 名字）才能定位到该字段。
  */
 @Mixin(EntitySection.class)
 @SuppressWarnings({"rawtypes", "unchecked"})
 public abstract class EntitySectionMixin implements SectionPosHolder, EcoptSectionLists {
 
-    @Shadow
-    @Final
-    private ClassInstanceMultiMap storage;
+    @Accessor("storage")
+    protected abstract ClassInstanceMultiMap<?> ecopt$storage();
 
     @Unique
     private long ecopt$sectionPos;
@@ -138,7 +139,7 @@ public abstract class EntitySectionMixin implements SectionPosHolder, EcoptSecti
     )
     private void ecopt$fastGetEntities(AABB bounds, AbortableIterationConsumer consumer,
                                        CallbackInfoReturnable<AbortableIterationConsumer.Continuation> cir) {
-        List<EntityAccess> all = (List<EntityAccess>) ((AllInstancesHolder) this.storage).ecopt$allInstances();
+        List<EntityAccess> all = (List<EntityAccess>) ((AllInstancesHolder) this.ecopt$storage()).ecopt$allInstances();
         if (!all.isEmpty()) {
             cir.setReturnValue(this.ecopt$scan(bounds, consumer, all));
         }

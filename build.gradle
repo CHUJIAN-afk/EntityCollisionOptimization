@@ -1,7 +1,21 @@
+buildscript {
+    repositories {
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+    }
+}
+
 plugins {
     id 'java-library'
-    id 'net.neoforged.moddev' version '2.0.141'
+    id 'idea'
+    id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
 }
+
+// MixinGradle：负责 refmap 生成与混入配置注入（MixinConfigs 清单项）
+apply plugin: 'org.spongepowered.mixin'
 
 version = mod_version
 group = mod_group_id
@@ -10,44 +24,72 @@ base {
     archivesName = mod_id
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
 
-neoForge {
-    version = project.neo_version
+minecraft {
+    mappings channel: 'official', version: minecraft_version
+    copyIdeResources = true
 
     runs {
         client {
-            client()
-            gameDirectory = file('run/client')
+            workingDirectory project.file('run/client')
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
         }
         server {
-            server()
-            programArgument '--nogui'
-            gameDirectory = file('run/server')
-        }
-    }
-
-    mods {
-        "${mod_id}" {
-            sourceSet(sourceSets.main)
+            workingDirectory project.file('run/server')
+            property 'forge.logging.console.level', 'debug'
+            args '--nogui'
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
         }
     }
 }
 
-tasks.matching { it.name == 'runClient' || it.name == 'runServer' }.configureEach {
-    doFirst {
-        def dup = fileTree('run/client/mods') { include "${mod_id}-*.jar" }.files
-        if (!dup.isEmpty()) {
-            throw new GradleException("run/client/mods 中存在 ${mod_id} 本体 jar（${dup}），会与 classpath 版本重复加载，请先移走。")
-        }
+mixin {
+    add sourceSets.main, "${mod_id}.refmap.json"
+    config "${mod_id}.mixins.json"
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // MixinExtras：Forge 1.20.1 不自带。编译用 common，运行时用 forge 版随 jar 打包（JarJar）
+    compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinextras_version}"))
+    implementation(jarJar("io.github.llamalad7:mixinextras-forge:${mixinextras_version}")) {
+        jarJar.ranged(it, "[${mixinextras_version},)")
     }
+
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    // EntityGetter / CollisionGetter 的注入点只能是接口默认方法，Mixin AP 只会在这种情况下报
+    // INJECTOR_IN_INTERFACE 诊断（refmap 仍会正常生成），这里把它降级掉。
+    options.compilerArgs += ['-AMSG_INJECTOR_IN_INTERFACE=disabled']
+}
+
+// MixinGradle 的 refmap 落在 build/tmp 下，不属于 compileJava 的缓存输出：
+// 一旦命中构建缓存，jar 里就会缺 ecopt.refmap.json（Forge 生产环境按 SRG 运行，缺了就无法重映射）。
+tasks.named('compileJava', JavaCompile).configure {
+    outputs.cacheIf { false }
 }
 
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
     var replaceProperties = [minecraft_version      : minecraft_version,
                              minecraft_version_range: minecraft_version_range,
-                             neo_version            : neo_version,
-                             neo_version_range      : neo_version_range,
+                             forge_version          : forge_version,
+                             forge_version_range    : forge_version_range,
                              loader_version_range   : loader_version_range,
                              mod_id                 : mod_id,
                              mod_name               : mod_name,
@@ -62,4 +104,16 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
 }
 
 sourceSets.main.resources.srcDir generateModMetadata
-neoForge.ideSyncTask generateModMetadata
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes(["Specification-Title"     : mod_id,
+                    "Specification-Vendor"    : mod_authors,
+                    "Specification-Version"   : "1",
+                    "Implementation-Title"    : project.name,
+                    "Implementation-Version"  : project.jar.archiveVersion,
+                    "Implementation-Vendor"   : mod_authors,
+                    "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")])
+    }
+    finalizedBy 'reobfJar'
+}

@@ -6,9 +6,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -30,41 +29,37 @@ import net.minecraft.util.ClassInstanceMultiMap;
  *
  * 包装类的每次 hasNext()/next() 都是一次额外的虚调用，实体段查询每个元素都要走一遍。
  * 注入后直接返回底层 ArrayList 的迭代器；调用方（EntitySection / 其它原版代码）只做读取。
+ *
+ * <p>1.20.1 的 Forge 生产环境按 SRG 名字运行，成员引用必须能重映射。这里用 {@code @Accessor}
+ * 而不是 {@code @Shadow}：注解处理器会把 {@code @Accessor} 的目标写进 refmap，{@code @Shadow} 不会。
  */
 @Mixin(ClassInstanceMultiMap.class)
 @SuppressWarnings({"rawtypes", "unchecked"})
 public abstract class ClassInstanceMultiMapMixin implements AllInstancesHolder {
 
-    @Shadow
-    @Final
-    private List allInstances;
-
-    @Shadow
-    @Final
-    private Map byClass;
-
-    @Shadow
-    @Final
-    private Class baseClass;
-
     @Override
-    public List<?> ecopt$allInstances() {
-        return this.allInstances;
-    }
+    @Accessor("allInstances")
+    public abstract List<?> ecopt$allInstances();
+
+    @Accessor("byClass")
+    protected abstract Map ecopt$byClass();
+
+    @Accessor("baseClass")
+    protected abstract Class ecopt$baseClass();
 
     @Inject(method = "iterator", at = @At("HEAD"), cancellable = true)
     private void ecopt$fastIterator(CallbackInfoReturnable<Iterator> cir) {
-        List instances = this.allInstances;
+        List instances = this.ecopt$allInstances();
         cir.setReturnValue(instances.isEmpty() ? Collections.emptyIterator() : instances.iterator());
     }
 
     @Inject(method = "find", at = @At("HEAD"), cancellable = true)
     private void ecopt$fastFind(Class type, CallbackInfoReturnable cir) {
-        if (this.baseClass.isAssignableFrom(type)) {
-            Map map = this.byClass;
+        if (this.ecopt$baseClass().isAssignableFrom(type)) {
+            Map map = this.ecopt$byClass();
             List cached = (List) map.get(type);
             if (cached == null) {
-                List instances = this.allInstances;
+                List instances = this.ecopt$allInstances();
                 int size = instances.size();
                 cached = new ArrayList(Math.max(4, size >> 2));
                 for (int i = 0; i < size; i++) {

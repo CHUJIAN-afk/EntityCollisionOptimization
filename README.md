@@ -46,7 +46,7 @@ Minecraft **1.21.1 / NeoForge 21.1.238** 的实体碰撞与实体段查询优化
 
 **1.20.1 上停用 2 项优化**：`EntityGetter#getEntityCollisions` 接管 与 `CollisionGetter#noCollision` 快速实现。
 Forge 1.20.1 使用 Mixin **0.8.5**，MixinExtras 0.5.3 的 `@WrapMethod` 在接口 mixin 上不被支持
-（运行时报 `InvalidInterfaceMixinException: ... is not supported on interface mixin method`，且为 FATAL）。
+（运行时报 `InvalidInterfaceMixinException: ... is not supported on interface mixin method`，且为 FATAL）。**已实测确认：Mixin 0.8.5 的接口 mixin 不支持任何注入器**——原生 `@Inject(...cancellable)` 同样报 `@Inject::... is not supported on interface mixin method`，只有普通 default 方法能被合并；接口级注入要 Mixin 0.8.6+ 才支持。
 这两项在 1.21.1/NeoForge（Mixin 0.8.7）上正常生效。其余 **9 个 mixin 全部保留且等价生效**
 （段级增量表、推挤查询接管、方块状态缓存、段修改版本号、段内子格索引、迭代器去包装、支撑方块捷径、
 实体查询时间戳、段坐标注入），即推挤 / 方块读取 / 段查询链路的收益与 1.21.1 一致，

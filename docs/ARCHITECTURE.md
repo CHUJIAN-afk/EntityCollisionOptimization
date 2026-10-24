@@ -7,29 +7,28 @@
 | `ClassInstanceMultiMapMixin` | `iterator()` / `find(Class)` | 直接返回底层 ArrayList（去掉 Guava / Collections 包装） |
 | `EntitySectionMixin` | `getEntities(AABB, consumer)` | 段内子格索引（自持逻辑，见下） |
 | `EntitySectionStorageMixin` | `createSection(long)` | 把段坐标写进 `EntitySection`（`SectionPosHolder`） |
-| `EntityGetterMixin` | `getEntityCollisions` | `EcoptCollisions.query` |
+| `LevelMixin` | 合并 `getEntityCollisions` 具体实现 | `EcoptCollisions.query`；自定义碰撞规则使用 `queryVanilla` 回退 |
 | `LivingEntityMixin` | `pushEntities` 里的 `getEntities` | `EcoptPush.query` |
-| `CollisionGetterMixin` | `noCollision` | `EcoptNoCollision.test` |
+| `LevelMixin` | 合并 `noCollision` 具体实现 | `EcoptNoCollision.test` |
 | `LevelChunkMixin` | `getBlockState(BlockPos)` | `EcoptBlockCache.getBlockState` |
 | `LevelChunkSectionMixin` | `setBlockState` / `read` / `recalcBlockCounts` | 推进段版本号；缓存段调色板的流体存在性 |
 | `LevelEntityGetterAdapterMixin` | 无（存储访问） | 暴露 `EntitySectionStorage` |
 | `LevelMixin` | 无（逻辑宿主） | 按查询框遍历可访问实体段（`EcoptLevelIndex`），取段内增量候选表 |
-| `EntityMixin` | `collide` / `updateFluidHeightAndDoFluidPushing()V` | 支撑方块捷径与干燥区段流体扫描捷径（自持逻辑） |
+| `EntityMixin` | `collide` / `updateFluidHeightAndDoFluidPushing(Predicate)` | 支撑方块捷径与干燥区段流体扫描捷径（自持逻辑） |
 
 ## 逻辑运行类
 
 | 类 | 作用 |
 | --- | --- |
 | `EcoptTicks` | 全局 tick 序号 / 查询 id |
-| `EcoptClassFilters` | 按类判断"是否重写了 canBeCollidedWith / isPushable"（`ClassValue` 缓存） |
+| `EcoptClassFilters` | 按类判断是否重写 `canBeCollidedWith / isPushable / canCollideWith`，通过 Forge 映射 SRG 名称，结果用 `ClassValue` 缓存 |
 | `EcoptBlockCache` | 区块级方块状态缓存（当前段引用 + 段版本号校验，跨 tick 复用） |
 | `EcoptCollisions` | 碰撞查询候选表 → 惰性形状列表 |
 | `EcoptPush` | 推挤查询候选表 |
 | `EcoptNoCollision` | 三重循环方块扫描版 `noCollision` |
 | `EcoptShapeList` | 惰性 `VoxelShape` 列表（只判空时不建 shape） |
 | `event/CommonEvents` / `event/ClientEvents` | 推进 tick 序号 |
-| `event/TestEvent` | 造堆积负载 → spark 采样 → 写结果 → 关游戏 |
-| `event/ClientShutdown` | 客户端侧关闭游戏 |
+| `src/smokeTest` | 独立测试模组：世界内 GameTest 与主界面渲染验收，不进入发布 jar |
 
 ## 运行逻辑宿主（逻辑与接入点同文件）
 

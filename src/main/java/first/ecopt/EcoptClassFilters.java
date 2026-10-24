@@ -1,6 +1,8 @@
 package first.ecopt;
 
 import net.minecraft.world.entity.Entity;
+import cpw.mods.modlauncher.api.INameMappingService;
+import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 
 /**
  * 按"类是否重写了某个方法"做的候选集判断，思路来自 Lithium 的 EntityClassGroup：
@@ -12,6 +14,11 @@ import net.minecraft.world.entity.Entity;
  */
 public final class EcoptClassFilters {
 
+    // Forge 在开发环境将 SRG 名称映射为 Parchment/Mojmap，生产环境保留 SRG。
+    private static final String HARD_METHOD = runtimeName("m_5829_");
+    private static final String PUSHABLE_METHOD = runtimeName("m_6094_");
+    private static final String COLLISION_METHOD = runtimeName("m_7337_");
+
     private EcoptClassFilters() {
     }
 
@@ -19,7 +26,7 @@ public final class EcoptClassFilters {
     private static final ClassValue<Boolean> HARD = new ClassValue<>() {
         @Override
         protected Boolean computeValue(Class<?> type) {
-            return overrides(type, "canBeCollidedWith");
+            return overrides(type, HARD_METHOD);
         }
     };
 
@@ -27,9 +34,20 @@ public final class EcoptClassFilters {
     private static final ClassValue<Boolean> PUSHABLE = new ClassValue<>() {
         @Override
         protected Boolean computeValue(Class<?> type) {
-            return overrides(type, "isPushable");
+            return overrides(type, PUSHABLE_METHOD);
         }
     };
+
+    private static final ClassValue<Boolean> CUSTOM_COLLISION = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            return overrides(type, COLLISION_METHOD, Entity.class);
+        }
+    };
+
+    public static boolean hasCustomCollision(Entity entity) {
+        return CUSTOM_COLLISION.get(entity.getClass());
+    }
 
     public static boolean maybeHard(Entity entity) {
         return HARD.get(entity.getClass());
@@ -39,9 +57,13 @@ public final class EcoptClassFilters {
         return PUSHABLE.get(entity.getClass());
     }
 
-    private static boolean overrides(Class<?> type, String name) {
+    private static String runtimeName(String srgName) {
+        return ObfuscationReflectionHelper.remapName(INameMappingService.Domain.METHOD, srgName);
+    }
+
+    private static boolean overrides(Class<?> type, String name, Class<?>... parameters) {
         try {
-            return type.getMethod(name).getDeclaringClass() != Entity.class;
+            return type.getMethod(name, parameters).getDeclaringClass() != Entity.class;
         } catch (NoSuchMethodException e) {
             // 反射拿不到就保守地当作"可能"，宁可多测几个也不能漏
             return true;

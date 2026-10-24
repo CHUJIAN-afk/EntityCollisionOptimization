@@ -98,7 +98,8 @@ public abstract class EntitySectionMixin implements SectionPosHolder, EcoptSecti
     @Inject(method = "add", at = @At("HEAD"))
     private void ecopt$onAdd(EntityAccess entity, CallbackInfo ci) {
         this.ecopt$indexValid = false;
-        if (entity instanceof Entity added && !added.isSpectator()) {
+        // 旁观状态会在实体留在原段时改变；只按类归档，查询 predicate 再过滤当前状态。
+        if (entity instanceof Entity added) {
             if (EcoptClassFilters.maybeHard(added)) {
                 if (this.ecopt$hard == null) {
                     this.ecopt$hard = new ArrayList<>(4);

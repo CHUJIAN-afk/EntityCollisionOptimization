@@ -1,68 +1,65 @@
 # EntityCollisionOptimization（ecopt）
 
-Minecraft **1.21.1 / NeoForge 21.1.238** 的实体碰撞与实体段查询优化模组。全部优化默认生效，没有配置项。
+Minecraft **1.20.1 / Forge 47.4.22** 的实体碰撞与实体段查询优化模组。已迁移 1.21.1 分支的全部优化路径，默认生效，没有配置项。
 结构划分见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，与同类模组的对比与组合实测见 [docs/TECHNICAL.md](docs/TECHNICAL.md)。
 
-> 本仓库的 `1.20.1-forge` 分支移植到 **Minecraft 1.20.1 / Forge 47.x**，差异见 [1.20.1 Forge 分支](#1201-forge-分支的差异与降级项)。
+> 当前为 `1.20.1-forge` 分支，使用 Parchment `2023.09.03-1.20.1` 映射与 Forge 自带的原生 Mixin 0.8.5，不依赖 MixinExtras。
 
 ## 优化清单
 
 | 优化 | 接入点 | 说明 |
 | --- | --- | --- |
 | 段级增量表 | `EntitySection.add/remove` | 每段自带"可碰撞 / 可推挤"两张表，随实体进出段维护，查询按框遍历段直接取表；不做每 tick 全量重建，无突发毛刺 |
-| 碰撞查询接管 | `EntityGetter.getEntityCollisions` | MixinExtras `@WrapMethod` 方法级接管，只遍历候选表并返回惰性形状列表 |
-| 推挤查询接管 | `LivingEntity.pushEntities` | MixinExtras `@WrapOperation`，只遍历可推挤候选表 |
-| noCollision 快速实现 | `CollisionGetter.noCollision` | 三重循环扫方块 + 空气/空形状早退 + 整方块只做 AABB 相交 + 命中即返回 |
-| 方块状态缓存 | `LevelChunk.getBlockState` | 每区块定长开放寻址表，命中要求"同 tick + 段版本号未变"，密集堆积时同一格只读一次调色板 |
+| 碰撞查询接管 | `Level.getEntityCollisions` | 类上合并具体实现，只遍历候选表并返回惰性形状列表；自定义碰撞规则回退到原版等价查询 |
+| 推挤查询接管 | `LivingEntity.pushEntities` | 原生 `@Redirect`，只遍历可推挤候选表 |
+| noCollision 快速实现 | `Level.noCollision` | 类上合并具体实现，三重循环扫方块 + 空气/空形状早退 + 整方块只做 AABB 相交 + 命中即返回 |
+| 方块状态缓存 | `LevelChunk.getBlockState` | 每区块定长开放寻址表，校验段引用与修改版本，未变更的状态跨 tick 复用 |
 | 段修改版本号 | `LevelChunkSection.setBlockState` | 供方块缓存精确失效 |
 | 段内子格索引 | `EntitySection.getEntities(AABB, consumer)` | 小查询框且同 tick 查 ≥2 次时走 2³ 子格索引，实体多格归档 + 时间戳去重，add/remove 立即失效 |
 | 直接遍历内部列表 | `ClassInstanceMultiMap.iterator/find` | 去掉 Guava / Collections 包装，避免每个元素一次额外虚调用 |
 | 支撑方块捷径 | `Entity.collide` | 纯竖直下落时按足迹两层探脚下方块，先探中心列；被完全挡住直接返回零位移 |
+| 干燥区段流体捷径 | `Entity.updateFluidHeightAndDoFluidPushing(Predicate)` | 按 tick 与段修改版本缓存流体存在性，调色板无流体时跳过逐格扫描 |
 
 ## 兼容性
 
-* 注入全部使用 **MixinExtras**（`@WrapMethod` / `@WrapOperation`），可与其它模组在同一点叠加；
-* 同一指令点被别的模组占用时用 `require = 0, expect = 0` 自动让位，不会让启动失败；
-* "优先"放在方法级：`getEntityCollisions` 由本模组整体接管；
-* 与 Lithium、加速碰撞（accelerated recoiling）的组合实测见 [docs/TECHNICAL.md](docs/TECHNICAL.md)。
+* 使用原生 `@Inject`、`@Redirect`、`@Accessor`、`@Invoker`，没有嵌套依赖 jar；
+* 推挤查询使用 `require = 0, expect = 0`，更高优先级重定向占用调用点时让位；原生重定向不支持 MixinExtras 式包装叠加；
+* `getEntityCollisions` / `noCollision` 在 `Level` 上实现，避免向接口默认方法注入；其它模组对这两个方法的覆盖需要单独验证；
+* 船、矿车及其它重写 `canCollideWith` 的实体使用原版等价查询，保留它们对可推挤实体的碰撞行为；
+* [docs/TECHNICAL.md](docs/TECHNICAL.md) 中的组合性能数据来自 1.21.1，不能作为当前 Forge 分支的兼容性结论。
 
 ## 已知取舍
 
-* 方块缓存命中要求"同 tick + 所在段版本号未变"；段被改写（`setBlockState`）立刻失效，
-  不走 `setBlockState` 的区块整体重载靠 tick 序号兜底；
+* 方块缓存检查当前段引用及修改版本；`setBlockState`、`read`、`recalcBlockCounts` 会推进版本，段整体替换也会使缓存失效；
 * 段内子格索引对同一 tick 内的实体移动留 1 格（2 格方块）余量，超出余量的瞬移理论上可能漏检一次；
 * 索引路径返回实体的顺序与线性扫描不同（碰撞、推挤、拾取都不依赖顺序）；
 * 快速路径不做异常兜底：出现意外情况会直接暴露而不是静默降级。
 
 ## 构建
 
-需要 JDK 17，`gradlew build`，产物在 `build/libs/`。
+需要 JDK 17，`gradlew build`，产物为 `build/libs/ecopt-1.20.1.1.jar`，直接安装这个 jar。
 
-## 1.20.1 Forge 分支的差异与降级项
+## 1.20.1 Forge 移植
 
-构建：ForgeGradle 6 + MixinGradle，`official` + 1.20.1 映射，Forge `47.4.22`，Java 17，元数据用 `src/main/templates/META-INF/mods.toml`。
+构建：ForgeGradle 6 + MixinGradle + Librarian 1.2.0，Parchment `2023.09.03-1.20.1`，Forge `47.4.22`，Java 17，元数据用 `src/main/templates/META-INF/mods.toml`。
 
-**1.20.1 生效情况见下：有 2 项停用**：11 个 mixin 的注入点、候选表、子格索引、方块缓存、支撑方块捷径在 1.20.1 上都是等价生效的（相关方法签名逐一核对过，`EntitySection#add/remove/getEntities`、`EntitySectionStorage#createSection`、`LevelEntityGetterAdapter#sectionStorage`、`LevelChunkSection#setBlockState/read/recalcBlockCounts/maybeHas`、`LevelChunk#getBlockState`、`ClassInstanceMultiMap#iterator/find`、`Level#getEntities()`、`LivingEntity#pushEntities`、`EntitySelector#CAN_BE_COLLIDED_WITH`、`EntitySelector#NO_SPECTATORS` 均未变）。
+原先停用的实体碰撞查询和 `noCollision` 已恢复。9 个 mixin 保留全部优化路径：原本两个接口 mixin 的行为合并到 `LevelMixin`。
 
-**1.20.1 上停用 2 项优化**：`EntityGetter#getEntityCollisions` 接管 与 `CollisionGetter#noCollision` 快速实现。
-Forge 1.20.1 使用 Mixin **0.8.5**，MixinExtras 0.5.3 的 `@WrapMethod` 在接口 mixin 上不被支持
-（运行时报 `InvalidInterfaceMixinException: ... is not supported on interface mixin method`，且为 FATAL）。**已实测确认：Mixin 0.8.5 的接口 mixin 不支持任何注入器**——原生 `@Inject(...cancellable)` 同样报 `@Inject::... is not supported on interface mixin method`，只有普通 default 方法能被合并；接口级注入要 Mixin 0.8.6+ 才支持。
-这两项在 1.21.1/NeoForge（Mixin 0.8.7）上正常生效。其余 **9 个 mixin 全部保留且等价生效**
-（段级增量表、推挤查询接管、方块状态缓存、段修改版本号、段内子格索引、迭代器去包装、支撑方块捷径、
-实体查询时间戳、段坐标注入），即推挤 / 方块读取 / 段查询链路的收益与 1.21.1 一致，
-缺的是密集堆积场景里收益最大的"实体碰撞查询接管"与"noCollision 快速实现"。
-停用后 1.20.1 服务端启动实测：`Done (10.970s)!`，日志无 ERROR/FATAL/异常。
-移植时需要处理的差异：
+关键适配：
 
 * **事件系统**：改用 `net.minecraftforge.event.TickEvent.ServerTickEvent` / `ClientTickEvent`（判断 `Phase.END`）、`net.minecraftforge.eventbus.api.SubscribeEvent`、`net.minecraftforge.fml.common.Mod.EventBusSubscriber`，主类 `@Mod` 来自 `net.minecraftforge.fml.common.Mod`；
-* **MixinExtras**：Forge 1.20.1 不自带，改为 `compileOnly(annotationProcessor(...mixinextras-common))` + `implementation(jarJar(...mixinextras-forge))`，运行时随 jar 打包。`@WrapMethod` 需要 ≥ 0.4.0，这里用 0.5.3；
-* **`Entity#updateFluidHeightAndDoFluidPushing()V`**：1.20.1 原版只有 `(TagKey<Fluid>, double)` 版本，无参重载是 Forge 补丁新增的（生产环境不会被重命名），因此该注入标 `remap = false`；
-* **接口 mixin**：`EntityGetter#getEntityCollisions` 与 `CollisionGetter#noCollision` 的注入点只能是接口默认方法，Mixin 注解处理器会报 `INJECTOR_IN_INTERFACE`（refmap 仍正常生成），构建里把这条诊断降级掉；
-* **`@Shadow` 改成 `@Accessor` / `@Invoker`**：Forge 1.20.1 生产环境按 SRG 名字运行，成员引用必须能被 refmap 重映射；注解处理器只会为 `@Accessor`/`@Invoker` 写映射（`@Shadow` 不写），所以 `ClassInstanceMultiMap`、`EntitySection`、`LevelEntityGetterAdapter` 的字段与 `LevelChunkSection#maybeHas` 都改成访问器/调用器，语义不变；
-* **refmap 与构建缓存**：MixinGradle 的 refmap 生成在 `build/tmp` 下，不算 `compileJava` 的缓存输出，构建里关掉了该任务的构建缓存，否则命中缓存后 jar 会缺 `ecopt.refmap.json`；
-* 包名、模组 id、mixin 接入点位置不变，逻辑类与 duck 接口未改动。
+* **接口限制**：`LevelMixin implements LevelAccessor` 并合并具体覆盖方法，ForgeGradle 根据接口继承关系将新增方法重映射为 SRG 名称；不使用接口注入器，也不压制对应编译诊断；
+* **原版回退**：不从 mixin 调用 `接口.super`。Mixin 0.8.5 会将该调用错误改写成类方法引用，运行时触发 `IncompatibleClassChangeError`；回退由普通逻辑类执行原版等价查询；
+* **流体扫描**：注入 Forge 新增的 `Predicate<FluidState>` 重载，覆盖原版入口、乘船入口及模组直接调用，使用 `remap = false`；
+* **反射分类**：通过 Forge 的 SRG 名称映射获取 `canBeCollidedWith`、`isPushable`、`canCollideWith` 的运行时名称，开发和生产环境都保留候选筛选；
+* **访问器与 refmap**：字段和内部方法通过 `@Accessor` / `@Invoker` 访问，生成的 refmap 同时提供给开发运行与发布 jar；
+* **运行目录**：客户端、服务端、GameTest 和主界面验收各自使用独立的 `run/*-1.20.1` 目录，避免加载旧 1.21.1 模组。
 
-产物：`build/libs/ecopt-<version>-all.jar`（已用 JarJar 打入 MixinExtras 运行时，装这一个即可）。不带 `-all` 的那个 jar 不含 MixinExtras，单独安装会缺少运行期依赖。
+## 验证
+
+* `gradlew runGameTestServer`：7 项世界内集成测试，覆盖分类、碰撞接管与船回退、推挤、缓存/流体失效、子格索引、支撑方块及流体扫描；
+* `gradlew runClientSmoke`：启动真实客户端，等待加载完成且主界面渲染至少 10 秒、60 帧，保存 `run/client-verification-1.20.1/smoke-results/title-screen.png` 与 `client-pass.txt`，然后正常退出；
+* 测试模组在 `src/smokeTest`，不包含在发布 jar 内。上述验收不会操作鼠标键盘。
 
 ## 许可证
 

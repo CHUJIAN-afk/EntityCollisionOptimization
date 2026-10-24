@@ -44,10 +44,10 @@ public abstract class EntityMixin implements EcoptVisitable {
     }
 
     /**
-     * {@code updateFluidHeightAndDoFluidPushing()} 是 Forge 补丁新增的重载（1.20.1 原版只有
-     * {@code (TagKey<Fluid>, double)} 版本），生产环境不会被 SRG 重命名，因此 remap = false。
+     * Forge 的实际扫描在 Predicate 重载中；覆盖原版入口、乘船入口和模组直接调用。
+     * 该重载为 Forge 新增，生产环境不按 SRG 重命名。
      */
-    @Inject(method = "updateFluidHeightAndDoFluidPushing()V", at = @At("HEAD"), cancellable = true, remap = false)
+    @Inject(method = "updateFluidHeightAndDoFluidPushing(Ljava/util/function/Predicate;)V", at = @At("HEAD"), cancellable = true, remap = false)
     private void ecopt$skipDryFluidScan(CallbackInfo ci) {
         Entity self = (Entity) (Object) this;
         Level level = self.level();

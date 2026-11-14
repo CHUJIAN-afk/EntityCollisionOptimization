@@ -1,0 +1,7 @@
+{
+  "projectId": 1744927,
+  "releaseType": "release",
+  "gameVersionNames": ["1.20.1", "Forge", "Client", "Server"],
+  "changelogType": "markdown",
+  "isMarkedForManualRelease": false
+}

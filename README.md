@@ -37,7 +37,7 @@ Minecraft **1.20.1 / Forge 47.4.22** 的实体碰撞与实体段查询优化模�
 
 ## 构建
 
-需要 JDK 17，`gradlew build`，安装 `build/libs/ecopt-1.20.1.2.jar`。带 `-slim` 后缀的 jar 不含 MixinExtras，不用于独立安装。
+需要 JDK 17，`gradlew build`，安装 `build/libs/ecopt-1.20.1.3.jar`。带 `-slim` 后缀的 jar 不含 MixinExtras，不用于独立安装。
 
 ## 1.20.1 Forge 移植
 

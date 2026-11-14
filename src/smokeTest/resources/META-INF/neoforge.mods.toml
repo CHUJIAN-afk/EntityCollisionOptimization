@@ -1,0 +1,10 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+[[mods]]
+modId = "ecopt_tests"
+version = "1"
+displayName = "ecopt integration tests"
+
+[[mixins]]
+config = "ecopt_tests.mixins.json"

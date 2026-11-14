@@ -12,25 +12,64 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+sourceSets {
+    smokeTest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+configurations {
+    smokeTestImplementation.extendsFrom implementation
+    smokeTestRuntimeOnly.extendsFrom runtimeOnly
+}
+
 neoForge {
     version = project.neo_version
-
-    runs {
-        client {
-            client()
-            gameDirectory = file('run/client')
-        }
-        server {
-            server()
-            programArgument '--nogui'
-            gameDirectory = file('run/server')
-        }
-    }
+    addModdingDependenciesTo(sourceSets.smokeTest)
 
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
         }
+        ecopt_tests {
+            sourceSet(sourceSets.smokeTest)
+        }
+    }
+
+    runs {
+        client {
+            client()
+            loadedMods = [mods.ecopt]
+            gameDirectory = file('run/client')
+        }
+        server {
+            server()
+            loadedMods = [mods.ecopt]
+            programArgument '--nogui'
+            gameDirectory = file('run/server')
+        }
+        gameTestServer {
+            type = 'gameTestServer'
+            sourceSet = sourceSets.smokeTest
+            loadedMods = [mods.ecopt, mods.ecopt_tests]
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'ecopt_tests'
+            gameDirectory = file('run/gametest-1.21.1')
+        }
+        clientSmoke {
+            client()
+            sourceSet = sourceSets.smokeTest
+            loadedMods = [mods.ecopt, mods.ecopt_tests]
+            systemProperty 'ecopt.smoke.client', 'true'
+            gameDirectory = file('run/client-verification-1.21.1')
+        }
+    }
+}
+
+tasks.matching { it.name == 'runClientSmoke' }.configureEach {
+    doFirst {
+        def smokeDirectory = file('run/client-verification-1.21.1')
+        smokeDirectory.mkdirs()
+        new File(smokeDirectory, 'options.txt').text = 'onboardAccessibility:false\nrealmsNotifications:false\n'
     }
 }
 

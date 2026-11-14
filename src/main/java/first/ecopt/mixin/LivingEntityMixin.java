@@ -15,12 +15,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 
-/**
- * 接入点：pushEntities 的实体查询改走 EcoptPush。<br>
- * 用 MixinExtras 的 @WrapOperation（可与其它模组的同点包装叠加），并带 require/expect = 0：
- * 若某模组已用原生 @Redirect 占了同一处调用点，我们让位而不是让启动失败。
- */
-@Mixin(LivingEntity.class)
+/** 低优先级包装推挤查询，让其它模组的包装保留在外层。 */
+@Mixin(value = LivingEntity.class, priority = 500)
 public abstract class LivingEntityMixin {
 
     @WrapOperation(
@@ -33,7 +29,7 @@ public abstract class LivingEntityMixin {
             expect = 0
     )
     private List<Entity> ecopt$pushableEntities(Level level, Entity except, AABB box, Predicate<? super Entity> predicate,
-                                                Operation<List<Entity>> original) {
+                                               Operation<List<Entity>> original) {
         List<Entity> fast = EcoptPush.query(level, except, box, predicate);
         return fast != null ? fast : original.call(level, except, box, predicate);
     }

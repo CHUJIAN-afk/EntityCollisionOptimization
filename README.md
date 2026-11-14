@@ -19,8 +19,8 @@ Minecraft **1.21.1 / NeoForge 21.1.238** 的实体碰撞与实体段查询优化
 
 ## 兼容性
 
-* 注入全部使用 **MixinExtras**（`@WrapMethod` / `@WrapOperation`），可与其它模组在同一点叠加；
-* 同一指令点被别的模组占用时用 `require = 0, expect = 0` 自动让位，不会让启动失败；
+* 推挤与接口查询使用 **MixinExtras**（`@WrapMethod` / `@WrapOperation`），不使用 `@Redirect`；MixinExtras 由 NeoForge 提供；
+* 推挤包装使用优先级 500，让常规优先级的其它包装在外层执行；回退通过 `Operation.call` 保留调用链，调用点消失时允许跳过注入；
 * "优先"放在方法级：`getEntityCollisions` 由本模组整体接管；
 * 与 Lithium、加速碰撞（accelerated recoiling）的组合实测见 [docs/TECHNICAL.md](docs/TECHNICAL.md)。
 
@@ -35,6 +35,12 @@ Minecraft **1.21.1 / NeoForge 21.1.238** 的实体碰撞与实体段查询优化
 ## 构建
 
 需要 JDK 21，`gradlew build`，产物在 `build/libs/`。
+
+## 验证
+
+* `gradlew runGameTestServer`：7 项世界内集成测试，覆盖分类、碰撞查询、推挤及同点包装过滤、缓存/流体失效、子格索引、支撑方块及流体扫描；
+* `gradlew runClientSmoke`：启动真实客户端，主界面渲染至少 10 秒、60 帧后保存 `run/client-verification-1.21.1/smoke-results/title-screen.png` 与 `client-pass.txt`，然后正常退出；
+* 测试模组在 `src/smokeTest`，不包含在发布 jar 内。
 
 ## 许可证
 

@@ -5,7 +5,9 @@ import java.util.function.Predicate;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 
 import first.ecopt.EcoptPush;
 import net.minecraft.world.entity.Entity;
@@ -13,14 +15,11 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 
-/**
- * 接入点：pushEntities 的实体查询改走 EcoptPush。<br>
- * 使用原生 @Redirect，并带 require/expect = 0：其它高优先级重定向占用调用点时让位。
- */
-@Mixin(LivingEntity.class)
+/** 低优先级包装推挤查询，让其它模组的包装保留在外层。 */
+@Mixin(value = LivingEntity.class, priority = 500)
 public abstract class LivingEntityMixin {
 
-    @Redirect(
+    @WrapOperation(
             method = "pushEntities()V",
             at = @At(
                     value = "INVOKE",
@@ -29,8 +28,9 @@ public abstract class LivingEntityMixin {
             require = 0,
             expect = 0
     )
-    private List<Entity> ecopt$pushableEntities(Level level, Entity except, AABB box, Predicate<? super Entity> predicate) {
+    private List<Entity> ecopt$pushableEntities(Level level, Entity except, AABB box, Predicate<? super Entity> predicate,
+                                               Operation<List<Entity>> original) {
         List<Entity> fast = EcoptPush.query(level, except, box, predicate);
-        return fast != null ? fast : level.getEntities(except, box, predicate);
+        return fast != null ? fast : original.call(level, except, box, predicate);
     }
 }

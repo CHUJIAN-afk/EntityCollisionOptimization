@@ -3,7 +3,7 @@
 Minecraft **1.20.1 / Forge 47.4.22** 的实体碰撞与实体段查询优化模组。已迁移 1.21.1 分支的全部优化路径，默认生效，没有配置项。
 结构划分见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，与同类模组的对比与组合实测见 [docs/TECHNICAL.md](docs/TECHNICAL.md)。
 
-> 当前为 `1.20.1-forge` 分支，使用 Parchment `2023.09.03-1.20.1` 映射与 Forge 自带的原生 Mixin 0.8.5，不依赖 MixinExtras。
+> 当前为 `1.20.1-forge` 分支，使用 Parchment `2023.09.03-1.20.1` 映射、Mixin 0.8.5 与内嵌的 MixinExtras 0.5.3。
 
 ## 优化清单
 
@@ -11,7 +11,7 @@ Minecraft **1.20.1 / Forge 47.4.22** 的实体碰撞与实体段查询优化模�
 | --- | --- | --- |
 | 段级增量表 | `EntitySection.add/remove` | 每段自带"可碰撞 / 可推挤"两张表，随实体进出段维护，查询按框遍历段直接取表；不做每 tick 全量重建，无突发毛刺 |
 | 碰撞查询接管 | `Level.getEntityCollisions` | 类上合并具体实现，只遍历候选表并返回惰性形状列表；自定义碰撞规则回退到原版等价查询 |
-| 推挤查询接管 | `LivingEntity.pushEntities` | 原生 `@Redirect`，只遍历可推挤候选表 |
+| 推挤查询接管 | `LivingEntity.pushEntities` | MixinExtras `@WrapOperation`，只遍历可推挤候选表 |
 | noCollision 快速实现 | `Level.noCollision` | 类上合并具体实现，三重循环扫方块 + 空气/空形状早退 + 整方块只做 AABB 相交 + 命中即返回 |
 | 方块状态缓存 | `LevelChunk.getBlockState` | 每区块定长开放寻址表，校验段引用与修改版本，未变更的状态跨 tick 复用 |
 | 段修改版本号 | `LevelChunkSection.setBlockState` | 供方块缓存精确失效 |
@@ -22,8 +22,8 @@ Minecraft **1.20.1 / Forge 47.4.22** 的实体碰撞与实体段查询优化模�
 
 ## 兼容性
 
-* 使用原生 `@Inject`、`@Redirect`、`@Accessor`、`@Invoker`，没有嵌套依赖 jar；
-* 推挤查询使用 `require = 0, expect = 0`，更高优先级重定向占用调用点时让位；原生重定向不支持 MixinExtras 式包装叠加；
+* 使用 `@Inject`、`@Accessor`、`@Invoker` 与 MixinExtras `@WrapOperation`，不使用 `@Redirect`；MixinExtras 随发布 jar 内嵌，无需另装；
+* 推挤包装使用优先级 500，让常规优先级的其它包装在外层执行；回退通过 `Operation.call` 保留调用链，调用点消失时允许跳过注入；
 * `getEntityCollisions` / `noCollision` 在 `Level` 上实现，避免向接口默认方法注入；其它模组对这两个方法的覆盖需要单独验证；
 * 船、矿车及其它重写 `canCollideWith` 的实体使用原版等价查询，保留它们对可推挤实体的碰撞行为；
 * [docs/TECHNICAL.md](docs/TECHNICAL.md) 中的组合性能数据来自 1.21.1，不能作为当前 Forge 分支的兼容性结论。
@@ -37,7 +37,7 @@ Minecraft **1.20.1 / Forge 47.4.22** 的实体碰撞与实体段查询优化模�
 
 ## 构建
 
-需要 JDK 17，`gradlew build`，产物为 `build/libs/ecopt-1.20.1.1.jar`，直接安装这个 jar。
+需要 JDK 17，`gradlew build`，安装 `build/libs/ecopt-1.20.1.2.jar`。带 `-slim` 后缀的 jar 不含 MixinExtras，不用于独立安装。
 
 ## 1.20.1 Forge 移植
 
@@ -57,7 +57,7 @@ Minecraft **1.20.1 / Forge 47.4.22** 的实体碰撞与实体段查询优化模�
 
 ## 验证
 
-* `gradlew runGameTestServer`：7 项世界内集成测试，覆盖分类、碰撞接管与船回退、推挤、缓存/流体失效、子格索引、支撑方块及流体扫描；
+* `gradlew runGameTestServer`：7 项世界内集成测试，覆盖分类、碰撞接管与船回退、推挤及同点包装过滤、缓存/流体失效、子格索引、支撑方块及流体扫描；
 * `gradlew runClientSmoke`：启动真实客户端，等待加载完成且主界面渲染至少 10 秒、60 帧，保存 `run/client-verification-1.20.1/smoke-results/title-screen.png` 与 `client-pass.txt`，然后正常退出；
 * 测试模组在 `src/smokeTest`，不包含在发布 jar 内。上述验收不会操作鼠标键盘。
 

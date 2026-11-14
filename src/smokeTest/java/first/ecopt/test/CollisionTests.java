@@ -111,7 +111,14 @@ public final class CollisionTests {
             List<Entity> fast = EcoptPush.query(level, except, box, predicate);
             helper.assertTrue(fast != null && fast.size() == 3, "All other pigs must reach push candidates");
             helper.assertTrue(new HashSet<>(fast).equals(new HashSet<>(level.getEntities(except, box, predicate))), "Push query must match vanilla");
-            // 正常 tick 也会执行 LivingEntity.pushEntities 的原生 Redirect。
+            pigs.forEach(pig -> pig.setDeltaMovement(Vec3.ZERO));
+            Pig skipped = pigs.get(1);
+            skipped.addTag("ecopt_tests_skip_push");
+            int queries = TestMod.pushQueries;
+            except.aiStep();
+            helper.assertTrue(TestMod.pushQueries > queries, "Another wrapper at the push query must still run");
+            helper.assertTrue(skipped.getDeltaMovement().equals(Vec3.ZERO), "The other wrapper must be able to exclude a push target");
+            helper.assertTrue(pigs.get(2).getDeltaMovement().horizontalDistanceSqr() > 0, "Unfiltered targets must still be pushed");
             pigs.forEach(Entity::discard);
             helper.succeed();
         });

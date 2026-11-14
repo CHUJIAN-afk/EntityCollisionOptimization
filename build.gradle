@@ -17,6 +17,7 @@ plugins {
 
 // MixinGradle：负责 refmap 生成与混入配置注入（MixinConfigs 清单项）
 apply plugin: 'org.spongepowered.mixin'
+jarJar.enable()
 
 version = mod_version
 group = mod_group_id
@@ -37,6 +38,7 @@ sourceSets {
     }
 }
 configurations {
+    smokeTestCompileOnly.extendsFrom compileOnly
     smokeTestImplementation.extendsFrom implementation
     smokeTestRuntimeOnly.extendsFrom runtimeOnly
 }
@@ -73,12 +75,14 @@ minecraft {
                 "${mod_id}" { source sourceSets.main }
                 ecopt_tests { source sourceSets.smokeTest }
             }
+            args '--mixin', 'ecopt_tests.mixins.json'
         }
         clientSmoke {
             parent minecraft.runs.client
             workingDirectory project.file('run/client-verification-1.20.1')
             property 'ecopt.smoke.client', 'true'
             property 'forge.logging.console.level', 'info'
+            args '--mixin', 'ecopt_tests.mixins.json'
             mods {
                 "${mod_id}" { source sourceSets.main }
                 ecopt_tests { source sourceSets.smokeTest }
@@ -96,6 +100,23 @@ dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
 
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    annotationProcessor 'io.github.llamalad7:mixinextras-common:0.5.3'
+    compileOnly 'io.github.llamalad7:mixinextras-common:0.5.3'
+    implementation(jarJar('io.github.llamalad7:mixinextras-forge:0.5.3')) {
+        jarJar.ranged(it, '[0.5.3,)')
+    }
+}
+
+tasks.named('jarJar').configure {
+    archiveClassifier = ''
+}
+
+tasks.named('jar').configure {
+    archiveClassifier = 'slim'
+}
+
+reobf {
+    jarJar {}
 }
 
 tasks.withType(JavaCompile).configureEach {

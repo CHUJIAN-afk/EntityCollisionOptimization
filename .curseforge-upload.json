@@ -1,0 +1,7 @@
+{
+  "projectId": 1744927,
+  "releaseType": "release",
+  "gameVersionNames": ["1.21.1", "NeoForge", "Client", "Server"],
+  "changelogType": "markdown",
+  "isMarkedForManualRelease": false
+}
